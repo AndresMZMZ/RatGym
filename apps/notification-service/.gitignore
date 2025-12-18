@@ -6,3 +6,10 @@ __pycache__/
 # Archivos de configuración de VS Code y del Sistema
 .vscode/
 .DS_Store
+
+# Variables de entorno con credenciales
+.env
+
+# Datos locales persistentes
+data/
+*.json
