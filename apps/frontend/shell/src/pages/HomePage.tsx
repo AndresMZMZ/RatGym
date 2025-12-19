@@ -1,11 +1,80 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+interface Notification {
+  id: string;
+  user_id: string;
+  title: string;
+  message: string;
+  type: string;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  read: boolean;
+  created_at: string;
+}
 
 export const HomePage: React.FC = () => {
+  const navigate = useNavigate();
   const [username, setUsername] = useState<string>('');
   const [currentUser, setCurrentUser] = useState<string | null>(
     localStorage.getItem('ratgym_username')
   );
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchNotifications();
+    }
+  }, [currentUser]);
+
+  const fetchNotifications = async () => {
+    try {
+      const response = await fetch(`http://localhost:3006/notifications/user/${currentUser}`);
+      if (response.ok) {
+        const data = await response.json();
+        // Ordenar por fecha (más recientes primero) y tomar solo las últimas 4
+        const sortedNotifications = data
+          .sort((a: Notification, b: Notification) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )
+          .slice(0, 4);
+        setNotifications(sortedNotifications);
+        setUnreadCount(data.filter((n: Notification) => !n.read).length);
+      }
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    }
+  };
+
+  const getTypeIcon = (type: string) => {
+    const icons: { [key: string]: string } = {
+      'ROUTINE_ASSIGNED': '💪',
+      'DAILY_ROUTINE': '📅',
+      'ROUTINE_COMPLETED': '✅',
+      'REST_DAY': '😴',
+      'NUTRITION_PLAN': '🥗',
+      'MEAL_REMINDER': '🍽️',
+      'GOAL_ACHIEVED': '🏆',
+      'CLASS_SCHEDULED': '🎯',
+      'CLASS_REMINDER': '⏰',
+      'CLASS_CANCELLED': '❌',
+      'SYSTEM_INFO': '🔔',
+    };
+    return icons[type] || '📬';
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    
+    if (hours < 1) return 'Hace menos de 1h';
+    if (hours < 24) return `Hace ${hours}h`;
+    const days = Math.floor(hours / 24);
+    return `Hace ${days}d`;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -385,27 +454,123 @@ export const HomePage: React.FC = () => {
                     {widget.subtitle}
                   </p>
                 </div>
+                {widget.title === 'Notificaciones' && unreadCount > 0 && (
+                  <div style={{
+                    backgroundColor: '#ef4444',
+                    color: '#fff',
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    padding: '4px 10px',
+                    borderRadius: '12px',
+                    minWidth: '24px',
+                    textAlign: 'center',
+                  }}>
+                    {unreadCount}
+                  </div>
+                )}
               </div>
 
               {/* Widget Content */}
               <div style={{
-                padding: '24px',
+                padding: widget.title === 'Notificaciones' && notifications.length > 0 ? '0' : '24px',
                 minHeight: '120px',
                 display: 'flex',
-                alignItems: 'center',
+                alignItems: widget.title === 'Notificaciones' && notifications.length > 0 ? 'stretch' : 'center',
                 justifyContent: 'center',
                 backgroundColor: '#fafafa',
               }}>
-                <div style={{
-                  textAlign: 'center',
-                  color: '#999',
-                  fontSize: '14px',
-                }}>
-                  <div style={{ fontSize: '40px', marginBottom: '12px', opacity: 0.3 }}>
-                    {widget.icon}
+                {widget.title === 'Notificaciones' && notifications.length > 0 ? (
+                  <div style={{ width: '100%' }}>
+                    {notifications.map((notification, nIndex) => (
+                      <div
+                        key={notification.id}
+                        style={{
+                          padding: '16px 24px',
+                          borderBottom: nIndex < notifications.length - 1 ? '1px solid #f0f0f0' : 'none',
+                          display: 'flex',
+                          gap: '12px',
+                          alignItems: 'flex-start',
+                          backgroundColor: notification.read ? '#fafafa' : '#fff',
+                          cursor: 'pointer',
+                          transition: 'background-color 0.2s',
+                        }}
+                        onClick={() => navigate('/notifications')}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3f4f6'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = notification.read ? '#fafafa' : '#fff'}
+                      >
+                        <div style={{ fontSize: '20px', flexShrink: 0 }}>
+                          {getTypeIcon(notification.type)}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '4px' }}>
+                            <div style={{
+                              fontSize: '14px',
+                              fontWeight: '600',
+                              color: '#000',
+                              lineHeight: '1.4',
+                              flex: 1,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}>
+                              {notification.title}
+                            </div>
+                            {!notification.read && (
+                              <div style={{
+                                width: '8px',
+                                height: '8px',
+                                backgroundColor: '#3b82f6',
+                                borderRadius: '50%',
+                                flexShrink: 0,
+                                marginTop: '4px',
+                              }} />
+                            )}
+                          </div>
+                          <p style={{
+                            fontSize: '13px',
+                            color: '#666',
+                            lineHeight: '1.4',
+                            margin: '0 0 6px 0',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {notification.message}
+                          </p>
+                          <span style={{
+                            fontSize: '12px',
+                            color: '#999',
+                          }}>
+                            {formatTimeAgo(notification.created_at)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div>Esperando integración de microservicio</div>
-                </div>
+                ) : widget.title === 'Notificaciones' ? (
+                  <div style={{
+                    textAlign: 'center',
+                    color: '#999',
+                    fontSize: '14px',
+                    padding: '24px',
+                  }}>
+                    <div style={{ fontSize: '40px', marginBottom: '12px', opacity: 0.3 }}>
+                      {widget.icon}
+                    </div>
+                    <div>No hay notificaciones</div>
+                  </div>
+                ) : (
+                  <div style={{
+                    textAlign: 'center',
+                    color: '#999',
+                    fontSize: '14px',
+                  }}>
+                    <div style={{ fontSize: '40px', marginBottom: '12px', opacity: 0.3 }}>
+                      {widget.icon}
+                    </div>
+                    <div>Esperando integración de microservicio</div>
+                  </div>
+                )}
               </div>
 
               {/* Widget Footer */}
@@ -415,6 +580,12 @@ export const HomePage: React.FC = () => {
                 borderTop: '1px solid #f0f0f0',
               }}>
                 <button
+                  onClick={() => {
+                    // Si es el widget de Notificaciones (índice 4), navegar a la página de notificaciones
+                    if (widget.title === 'Notificaciones') {
+                      navigate('/notifications');
+                    }
+                  }}
                   style={{
                     width: '100%',
                     padding: '10px',
